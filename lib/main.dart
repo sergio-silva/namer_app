@@ -38,8 +38,11 @@ class MyAppState extends ChangeNotifier {
   var favorites = <WordPair>{};
 
   void toogleFavorite() {
-    favorites.add(current);
-
+    if (favorites.contains(current)) {
+      favorites.remove(current);
+    } else {
+      favorites.add(current);
+    }
     notifyListeners();
   }
 }
@@ -62,7 +65,7 @@ class _MyHomePageState extends State<MyHomePage> {
       case 0:
         page = GeneratorPage();
       case 1:
-        page = Placeholder();
+        page = FavoritesPage();
       default:
         throw UnimplementedError('No widget for $selectedIndex');
     }
@@ -176,5 +179,30 @@ class BigCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class FavoritesPage extends StatelessWidget {
+  @override
+
+  Widget build(BuildContext context) {
+
+    var appState = context.watch<MyAppState>();
+    var favorites = appState.favorites;
+
+    if (favorites.isEmpty) {
+      return Center(
+        child: Text('No favorites yet.'),
+      );
+    } else {
+      return ListView(
+        children: favorites.map((pair) {
+          return ListTile(
+            leading: Icon(Icons.favorite),
+            title: Text(pair.asLowerCase),
+         );
+        }).toList(),
+      );
+    }
   }
 }
