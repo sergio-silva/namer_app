@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:english_words/english_words.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -33,7 +35,10 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   @override
   void dispose() {
-    widget.notificationService?.dispose();
+    // dispose() is async; fire-and-forget is intentional here since State.dispose()
+    // must be synchronous. Subscriptions are cancelled in the background.
+    final future = widget.notificationService?.dispose();
+    if (future != null) unawaited(future);
     super.dispose();
   }
 

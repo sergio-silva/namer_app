@@ -69,7 +69,13 @@ void _stubDefaults(
   when(() => messaging.onTokenRefresh)
       .thenAnswer((_) => const Stream.empty());
 
-  when(() => plugin.initialize(any())).thenAnswer((_) async => true);
+  when(
+    () => plugin.initialize(
+      any(),
+      onDidReceiveNotificationResponse:
+          any(named: 'onDidReceiveNotificationResponse'),
+    ),
+  ).thenAnswer((_) async => true);
   when(
     () => plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>(),

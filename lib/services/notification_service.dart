@@ -11,7 +11,13 @@ import '../firebase_options.dart';
 // Must be top-level (not a method) to be used as a background isolate entry point.
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Guard against duplicate-app error if the isolate receives a second message
+  // before the first handler has fully completed.
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
   if (kDebugMode) debugPrint('FCM background message: ${message.messageId}');
 }
 
@@ -59,14 +65,29 @@ class NotificationService {
 
     // Set up local notifications plugin
     const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const DarwinInitializationSettings iosSettings =
-        DarwinInitializationSettings();
+        AndroidInitializationSettings('@drawable/ic_notification');
+    // Explicitly enable all foreground presentation options (alert, sound, badge,
+    // banner, list) so local notifications are visible while the app is open.
+    // These all default to true in v18, but are set explicitly to document intent.
+    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
+      defaultPresentAlert: true,
+      defaultPresentSound: true,
+      defaultPresentBadge: true,
+      defaultPresentBanner: true,
+      defaultPresentList: true,
+    );
     const InitializationSettings initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     );
-    await _localNotifications.initialize(initSettings);
+    await _localNotifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        if (kDebugMode) {
+          debugPrint('Local notification tapped: ${response.payload}');
+        }
+      },
+    );
 
     // Create the Android notification channel
     await _localNotifications
@@ -89,23 +110,25 @@ class NotificationService {
       }
     }
 
-    // Get FCM device token (used by the server to target this device)
+    // Get FCM device token (used by the server to target this device).
+    // TODO(you): send this token to your backend so it can push to this device.
     final token = await _messaging.getToken();
     if (token != null) {
       if (kDebugMode) debugPrint('FCM Token: $token');
     }
 
-    // Refresh token listener
+    // Refresh token listener.
+    // TODO(you): send the refreshed token to your backend to keep it current.
     _onTokenRefreshSub = _messaging.onTokenRefresh.listen((newToken) {
       if (kDebugMode) debugPrint('FCM Token refreshed: $newToken');
     });
 
     // Foreground message handler — show a local notification
-    _onMessageSub = _onMessageStream.listen((RemoteMessage message) {
+    _onMessageSub = _onMessageStream.listen((RemoteMessage message) async {
       final notification = message.notification;
       if (notification == null) return;
 
-      _localNotifications.show(
+      await _localNotifications.show(
         _notificationId++,
         notification.title,
         notification.body,
@@ -114,7 +137,7 @@ class NotificationService {
             _channel.id,
             _channel.name,
             channelDescription: _channel.description,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notification',
           ),
           iOS: const DarwinNotificationDetails(),
         ),
@@ -142,9 +165,9 @@ class NotificationService {
     }
   }
 
-  void dispose() {
-    _onMessageSub?.cancel();
-    _onMessageOpenedAppSub?.cancel();
-    _onTokenRefreshSub?.cancel();
+  Future<void> dispose() async {
+    await _onMessageSub?.cancel();
+    await _onMessageOpenedAppSub?.cancel();
+    await _onTokenRefreshSub?.cancel();
   }
 }
