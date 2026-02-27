@@ -8,22 +8,35 @@ import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  NotificationService? notificationService;
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    final notificationService = NotificationService();
+    notificationService = NotificationService();
     await notificationService.initialize();
-  } catch (e) {
-    if (kDebugMode) debugPrint('Firebase init failed: $e');
+  } catch (e, st) {
+    if (kDebugMode) debugPrint('Firebase init failed: $e\n$st');
   }
-  runApp(const MyApp());
+  runApp(MyApp(notificationService: notificationService));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({super.key, this.notificationService});
 
-  // This widget is the root of your application.
+  final NotificationService? notificationService;
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void dispose() {
+    widget.notificationService?.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
