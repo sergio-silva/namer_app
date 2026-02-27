@@ -1,15 +1,32 @@
+import 'dart:async';
+
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-// Top-level handler required by FCM for background/terminated messages
+import '../firebase_options.dart';
+
+// Top-level handler required by FCM for background/terminated messages.
+// Must be top-level (not a method) to be used as a background isolate entry point.
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  print('FCM background message: ${message.messageId}');
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  if (kDebugMode) debugPrint('FCM background message: ${message.messageId}');
 }
 
 class NotificationService {
-  static final FlutterLocalNotificationsPlugin _localNotifications =
-      FlutterLocalNotificationsPlugin();
+  final FirebaseMessaging _messaging;
+  final FlutterLocalNotificationsPlugin _localNotifications;
+  final Stream<RemoteMessage> _onMessageStream;
+  final Stream<RemoteMessage> _onMessageOpenedAppStream;
+  final void Function(BackgroundMessageHandler)? _registerBackgroundHandler;
+
+  static int _notificationId = 0;
+
+  StreamSubscription<RemoteMessage>? _onMessageSub;
+  StreamSubscription<RemoteMessage>? _onMessageOpenedAppSub;
+  StreamSubscription<String>? _onTokenRefreshSub;
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'high_importance_channel',
@@ -18,9 +35,27 @@ class NotificationService {
     importance: Importance.high,
   );
 
-  static Future<void> initialize() async {
-    // Register background message handler
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  NotificationService({
+    FirebaseMessaging? messaging,
+    FlutterLocalNotificationsPlugin? localNotifications,
+    Stream<RemoteMessage>? onMessageStream,
+    Stream<RemoteMessage>? onMessageOpenedAppStream,
+    // Allows tests to replace the static FirebaseMessaging.onBackgroundMessage
+    // call (which requires a native platform) with a no-op.
+    void Function(BackgroundMessageHandler)? registerBackgroundHandler,
+  })  : _messaging = messaging ?? FirebaseMessaging.instance,
+        _localNotifications =
+            localNotifications ?? FlutterLocalNotificationsPlugin(),
+        _onMessageStream = onMessageStream ?? FirebaseMessaging.onMessage,
+        _onMessageOpenedAppStream =
+            onMessageOpenedAppStream ?? FirebaseMessaging.onMessageOpenedApp,
+        _registerBackgroundHandler = registerBackgroundHandler;
+
+  Future<void> initialize() async {
+    // Register background message handler (use injected fn if provided, e.g. in tests)
+    final registerBg =
+        _registerBackgroundHandler ?? FirebaseMessaging.onBackgroundMessage;
+    registerBg(_firebaseMessagingBackgroundHandler);
 
     // Set up local notifications plugin
     const AndroidInitializationSettings androidSettings =
@@ -40,29 +75,38 @@ class NotificationService {
         ?.createNotificationChannel(_channel);
 
     // Request notification permissions (iOS + Android 13+)
-    final messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission(
+    final settings = await _messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
+    if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+        settings.authorizationStatus != AuthorizationStatus.provisional) {
+      if (kDebugMode) {
+        debugPrint(
+          'FCM permission denied: ${settings.authorizationStatus}',
+        );
+      }
+    }
 
-    // Get and print the FCM device token (used by the server to target this device)
-    final token = await messaging.getToken();
-    print('FCM Token: $token');
+    // Get FCM device token (used by the server to target this device)
+    final token = await _messaging.getToken();
+    if (token != null) {
+      if (kDebugMode) debugPrint('FCM Token: $token');
+    }
 
     // Refresh token listener
-    messaging.onTokenRefresh.listen((newToken) {
-      print('FCM Token refreshed: $newToken');
+    _onTokenRefreshSub = _messaging.onTokenRefresh.listen((newToken) {
+      if (kDebugMode) debugPrint('FCM Token refreshed: $newToken');
     });
 
     // Foreground message handler — show a local notification
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    _onMessageSub = _onMessageStream.listen((RemoteMessage message) {
       final notification = message.notification;
       if (notification == null) return;
 
       _localNotifications.show(
-        notification.hashCode,
+        _notificationId++,
         notification.title,
         notification.body,
         NotificationDetails(
@@ -78,14 +122,29 @@ class NotificationService {
     });
 
     // Background → app opened via notification tap
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('FCM notification tapped (background): ${message.messageId}');
+    _onMessageOpenedAppSub =
+        _onMessageOpenedAppStream.listen((RemoteMessage message) {
+      if (kDebugMode) {
+        debugPrint(
+          'FCM notification tapped (background): ${message.messageId}',
+        );
+      }
     });
 
     // Terminated → app opened via notification tap
-    final initialMessage = await messaging.getInitialMessage();
+    final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
-      print('FCM notification tapped (terminated): ${initialMessage.messageId}');
+      if (kDebugMode) {
+        debugPrint(
+          'FCM notification tapped (terminated): ${initialMessage.messageId}',
+        );
+      }
     }
+  }
+
+  void dispose() {
+    _onMessageSub?.cancel();
+    _onMessageOpenedAppSub?.cancel();
+    _onTokenRefreshSub?.cancel();
   }
 }
