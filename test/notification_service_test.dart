@@ -201,8 +201,9 @@ void main() {
       ).captured;
 
       expect(captured.length, 2);
-      // Second call ID must be exactly one more than the first
-      expect(captured[1] as int, (captured[0] as int) + 1);
+      // IDs start at 0 per instance and increment by 1
+      expect(captured[0] as int, 0);
+      expect(captured[1] as int, 1);
 
       service.dispose();
       await controller.close();

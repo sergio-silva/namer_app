@@ -22,7 +22,7 @@ class NotificationService {
   final Stream<RemoteMessage> _onMessageOpenedAppStream;
   final void Function(BackgroundMessageHandler)? _registerBackgroundHandler;
 
-  static int _notificationId = 0;
+  int _notificationId = 0;
 
   StreamSubscription<RemoteMessage>? _onMessageSub;
   StreamSubscription<RemoteMessage>? _onMessageOpenedAppSub;
