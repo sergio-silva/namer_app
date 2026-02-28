@@ -16,6 +16,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.x'
 
       # firebase_options.dart is gitignored (contains API keys).
       # In CI we write a stub so the code compiles and tests can run.

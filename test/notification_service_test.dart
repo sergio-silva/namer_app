@@ -128,7 +128,7 @@ void main() {
 
       await service.initialize();
 
-      expect(() => service.dispose(), returnsNormally);
+      await expectLater(service.dispose(), completes);
 
       await messageController.close();
       await openedController.close();
@@ -174,7 +174,7 @@ void main() {
 
       verifyNever(() => mockPlugin.show(any(), any(), any(), any()));
 
-      service.dispose();
+      await service.dispose();
       await controller.close();
     });
 
@@ -211,7 +211,7 @@ void main() {
       expect(captured[0] as int, 0);
       expect(captured[1] as int, 1);
 
-      service.dispose();
+      await service.dispose();
       await controller.close();
     });
   });

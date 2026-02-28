@@ -119,40 +119,54 @@ class NotificationService {
 
     // Refresh token listener.
     // TODO(you): send the refreshed token to your backend to keep it current.
-    _onTokenRefreshSub = _messaging.onTokenRefresh.listen((newToken) {
-      if (kDebugMode) debugPrint('FCM Token refreshed: $newToken');
-    });
+    _onTokenRefreshSub = _messaging.onTokenRefresh.listen(
+      (newToken) {
+        if (kDebugMode) debugPrint('FCM Token refreshed: $newToken');
+      },
+      onError: (Object e, StackTrace st) {
+        if (kDebugMode) debugPrint('FCM onTokenRefresh error: $e\n$st');
+      },
+    );
 
     // Foreground message handler — show a local notification
-    _onMessageSub = _onMessageStream.listen((RemoteMessage message) async {
-      final notification = message.notification;
-      if (notification == null) return;
+    _onMessageSub = _onMessageStream.listen(
+      (RemoteMessage message) async {
+        final notification = message.notification;
+        if (notification == null) return;
 
-      await _localNotifications.show(
-        _notificationId++,
-        notification.title,
-        notification.body,
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            _channel.id,
-            _channel.name,
-            channelDescription: _channel.description,
-            icon: '@drawable/ic_notification',
+        await _localNotifications.show(
+          _notificationId++,
+          notification.title,
+          notification.body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              _channel.id,
+              _channel.name,
+              channelDescription: _channel.description,
+              icon: '@drawable/ic_notification',
+            ),
+            iOS: const DarwinNotificationDetails(),
           ),
-          iOS: const DarwinNotificationDetails(),
-        ),
-      );
-    });
+        );
+      },
+      onError: (Object e, StackTrace st) {
+        if (kDebugMode) debugPrint('FCM onMessage error: $e\n$st');
+      },
+    );
 
     // Background → app opened via notification tap
-    _onMessageOpenedAppSub =
-        _onMessageOpenedAppStream.listen((RemoteMessage message) {
-      if (kDebugMode) {
-        debugPrint(
-          'FCM notification tapped (background): ${message.messageId}',
-        );
-      }
-    });
+    _onMessageOpenedAppSub = _onMessageOpenedAppStream.listen(
+      (RemoteMessage message) {
+        if (kDebugMode) {
+          debugPrint(
+            'FCM notification tapped (background): ${message.messageId}',
+          );
+        }
+      },
+      onError: (Object e, StackTrace st) {
+        if (kDebugMode) debugPrint('FCM onMessageOpenedApp error: $e\n$st');
+      },
+    );
 
     // Terminated → app opened via notification tap
     final initialMessage = await _messaging.getInitialMessage();
