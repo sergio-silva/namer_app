@@ -214,5 +214,122 @@ void main() {
       await service.dispose();
       await controller.close();
     });
+
+    test('show() throwing is caught and does not propagate as unhandled error',
+        () async {
+      final controller = StreamController<RemoteMessage>();
+
+      _stubDefaults(mockMessaging, mockPlugin);
+      when(() => mockPlugin.show(any(), any(), any(), any()))
+          .thenThrow(Exception('platform error'));
+
+      final service = NotificationService(
+        messaging: mockMessaging,
+        localNotifications: mockPlugin,
+        onMessageStream: controller.stream,
+        onMessageOpenedAppStream: const Stream.empty(),
+        registerBackgroundHandler: _noopRegisterBackground,
+      );
+
+      await service.initialize();
+
+      const notification = RemoteNotification(title: 'Hello', body: 'World');
+      controller.add(_makeMessage(notification: notification));
+
+      // If the error escaped the try/catch it would become an unhandled Future
+      // and the test framework would fail the test here.
+      await Future<void>.delayed(Duration.zero);
+
+      await service.dispose();
+      await controller.close();
+    });
+
+    test('onTokenRefresh stream emitting a token does not throw', () async {
+      final tokenController = StreamController<String>();
+
+      _stubDefaults(mockMessaging, mockPlugin);
+      when(() => mockMessaging.onTokenRefresh)
+          .thenAnswer((_) => tokenController.stream);
+
+      final service = NotificationService(
+        messaging: mockMessaging,
+        localNotifications: mockPlugin,
+        onMessageStream: const Stream.empty(),
+        onMessageOpenedAppStream: const Stream.empty(),
+        registerBackgroundHandler: _noopRegisterBackground,
+      );
+
+      await service.initialize();
+
+      tokenController.add('new-token-abc');
+      await Future<void>.delayed(Duration.zero);
+
+      await service.dispose();
+      await tokenController.close();
+    });
+
+    test('onMessageOpenedApp listener receives message without throwing',
+        () async {
+      final openedController = StreamController<RemoteMessage>();
+
+      _stubDefaults(mockMessaging, mockPlugin);
+
+      final service = NotificationService(
+        messaging: mockMessaging,
+        localNotifications: mockPlugin,
+        onMessageStream: const Stream.empty(),
+        onMessageOpenedAppStream: openedController.stream,
+        registerBackgroundHandler: _noopRegisterBackground,
+      );
+
+      await service.initialize();
+
+      openedController.add(_makeMessage());
+      await Future<void>.delayed(Duration.zero);
+
+      await service.dispose();
+      await openedController.close();
+    });
+
+    test('initialize() handles non-null getInitialMessage without throwing',
+        () async {
+      _stubDefaults(mockMessaging, mockPlugin);
+      when(() => mockMessaging.getInitialMessage())
+          .thenAnswer((_) async => _makeMessage());
+
+      final service = NotificationService(
+        messaging: mockMessaging,
+        localNotifications: mockPlugin,
+        onMessageStream: const Stream.empty(),
+        onMessageOpenedAppStream: const Stream.empty(),
+        registerBackgroundHandler: _noopRegisterBackground,
+      );
+
+      await expectLater(service.initialize(), completes);
+    });
+
+    test('initialize() called twice is a no-op on the second call', () async {
+      _stubDefaults(mockMessaging, mockPlugin);
+
+      final service = NotificationService(
+        messaging: mockMessaging,
+        localNotifications: mockPlugin,
+        onMessageStream: const Stream.empty(),
+        onMessageOpenedAppStream: const Stream.empty(),
+        registerBackgroundHandler: _noopRegisterBackground,
+      );
+
+      await service.initialize();
+      await service.initialize(); // second call must be a no-op
+
+      // requestPermission should only have been called once
+      verify(
+        () => mockMessaging.requestPermission(
+          alert: any(named: 'alert'),
+          badge: any(named: 'badge'),
+          sound: any(named: 'sound'),
+        ),
+      ).called(1);
+    });
   });
 }

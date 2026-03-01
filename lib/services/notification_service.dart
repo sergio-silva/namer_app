@@ -29,6 +29,7 @@ class NotificationService {
   final void Function(BackgroundMessageHandler)? _registerBackgroundHandler;
 
   int _notificationId = 0;
+  bool _initialized = false;
 
   StreamSubscription<RemoteMessage>? _onMessageSub;
   StreamSubscription<RemoteMessage>? _onMessageOpenedAppSub;
@@ -58,6 +59,9 @@ class NotificationService {
         _registerBackgroundHandler = registerBackgroundHandler;
 
   Future<void> initialize() async {
+    if (_initialized) return;
+    _initialized = true;
+
     // Register background message handler (use injected fn if provided, e.g. in tests)
     final registerBg =
         _registerBackgroundHandler ?? FirebaseMessaging.onBackgroundMessage;
@@ -134,20 +138,24 @@ class NotificationService {
         final notification = message.notification;
         if (notification == null) return;
 
-        await _localNotifications.show(
-          _notificationId++,
-          notification.title,
-          notification.body,
-          NotificationDetails(
-            android: AndroidNotificationDetails(
-              _channel.id,
-              _channel.name,
-              channelDescription: _channel.description,
-              icon: '@drawable/ic_notification',
+        try {
+          await _localNotifications.show(
+            _notificationId++,
+            notification.title,
+            notification.body,
+            NotificationDetails(
+              android: AndroidNotificationDetails(
+                _channel.id,
+                _channel.name,
+                channelDescription: _channel.description,
+                icon: '@drawable/ic_notification',
+              ),
+              iOS: const DarwinNotificationDetails(),
             ),
-            iOS: const DarwinNotificationDetails(),
-          ),
-        );
+          );
+        } catch (e, st) {
+          if (kDebugMode) debugPrint('FCM show error: $e\n$st');
+        }
       },
       onError: (Object e, StackTrace st) {
         if (kDebugMode) debugPrint('FCM onMessage error: $e\n$st');
