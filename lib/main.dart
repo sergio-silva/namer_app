@@ -1,15 +1,47 @@
+import 'dart:async';
+
 import 'package:english_words/english_words.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'services/notification_service.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  NotificationService? notificationService;
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    notificationService = NotificationService();
+    await notificationService.initialize();
+  } catch (e, st) {
+    if (kDebugMode) debugPrint('Firebase init failed: $e\n$st');
+  }
+  runApp(MyApp(notificationService: notificationService));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({super.key, this.notificationService});
 
-  // This widget is the root of your application.
+  final NotificationService? notificationService;
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void dispose() {
+    // dispose() is async; fire-and-forget is intentional here since State.dispose()
+    // must be synchronous. Subscriptions are cancelled in the background.
+    final future = widget.notificationService?.dispose();
+    if (future != null) unawaited(future);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(

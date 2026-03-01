@@ -2,6 +2,24 @@
 
 A new Flutter project.
 
+## Firebase Setup
+
+This project uses Firebase. The `lib/firebase_options.dart` file is gitignored because it
+contains API keys. You must generate it locally before building or running the app.
+
+1. Install the FlutterFire CLI:
+   ```sh
+   dart pub global activate flutterfire_cli
+   ```
+2. Run FlutterFire configure from the project root:
+   ```sh
+   flutterfire configure
+   ```
+   This regenerates `lib/firebase_options.dart` with your project's credentials.
+
+3. The file is gitignored — every developer and CI environment must run `flutterfire configure`
+   once after cloning.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

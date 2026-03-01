@@ -1,0 +1,41 @@
+name: Flutter CI
+
+on:
+  push:
+    branches: [ main, integrates-with-firebase ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.x'
+          cache: true
+
+      # firebase_options.dart is gitignored (contains API keys).
+      # In CI we write a stub so the code compiles and tests can run.
+      # For a real deployment pipeline, restore the file from a secret:
+      #   echo "${{ secrets.FIREBASE_OPTIONS_DART }}" > lib/firebase_options.dart
+      - name: Create stub firebase_options.dart
+        run: |
+          cat > lib/firebase_options.dart << 'DART_EOF'
+          // CI stub — run `flutterfire configure` locally to regenerate.
+          // See README.md Firebase Setup section.
+          // ignore_for_file: type=lint
+          import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+          class DefaultFirebaseOptions {
+            static FirebaseOptions get currentPlatform =>
+                throw UnsupportedError('Firebase not configured in CI.');
+          }
+          DART_EOF
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
