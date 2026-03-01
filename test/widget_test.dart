@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:namer_app/main.dart';
+import 'package:namer_app/services/auth_service.dart';
 
 void main() {
-  testWidgets('MyApp renders NavigationRail and GeneratorPage smoke test',
-      (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
+  testWidgets('MyApp shows loading indicator on cold start', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final authService = AuthService(prefs: prefs);
 
-    expect(find.byType(NavigationRail), findsOneWidget);
-    expect(find.byType(GeneratorPage), findsOneWidget);
+    await tester.pumpWidget(MyApp(authService: authService, prefs: prefs));
+
+    // While checkSession() is in flight, isLoading=true → spinner is shown.
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 }

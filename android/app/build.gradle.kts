@@ -26,7 +26,7 @@ android {
         applicationId = "com.example.namer_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 21 // core library desugaring (desugar_jdk_libs) requires minSdk >= 21
+        minSdk = flutter.minSdkVersion // flutter_secure_storage requires minSdk >= 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
