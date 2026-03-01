@@ -5,11 +5,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
+import 'screens/login_page.dart';
+import 'services/auth_service.dart';
 import 'services/notification_service.dart';
+import 'state/auth_state.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final prefs = await SharedPreferences.getInstance();
+  final authService = AuthService(prefs: prefs);
+
   NotificationService? notificationService;
   try {
     await Firebase.initializeApp(
@@ -20,13 +28,14 @@ void main() async {
   } catch (e, st) {
     if (kDebugMode) debugPrint('Firebase init failed: $e\n$st');
   }
-  runApp(MyApp(notificationService: notificationService));
+  runApp(MyApp(notificationService: notificationService, authService: authService));
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, this.notificationService});
+  const MyApp({super.key, this.notificationService, required this.authService});
 
   final NotificationService? notificationService;
+  final AuthService authService;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -44,17 +53,31 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => MyAppState(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) =>
+              AuthState(authService: widget.authService)..checkSession(),
+        ),
+        ChangeNotifierProvider(create: (_) => MyAppState()),
+      ],
       child: MaterialApp(
         title: 'Namer App',
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.lightBlue
-          )
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightBlue),
         ),
-        home: MyHomePage(),
-      )
+        home: Consumer<AuthState>(
+          builder: (_, authState, __) {
+            if (authState.isLoading) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (authState.isLoggedIn) return MyHomePage();
+            return const LoginPage();
+          },
+        ),
+      ),
     );
   }
 }
