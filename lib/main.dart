@@ -158,7 +158,6 @@ class _MyHomePageState extends State<MyHomePage> {
                           icon: const Icon(Icons.logout),
                           onPressed: () {
                             context.read<AuthState>().logout();
-                            page = const LoginPage();
                           },
                           tooltip: 'Logout',
                         ),
