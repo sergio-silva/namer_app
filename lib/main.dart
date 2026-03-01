@@ -69,14 +69,22 @@ class _MyAppState extends State<MyApp> {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightBlue),
         ),
         home: Consumer<AuthState>(
-          builder: (_,authState,_) {
+          builder: (_, authState, _) {
+            final Widget child;
             if (authState.isLoading) {
-              return const Scaffold(
+              child = const Scaffold(
+                key: ValueKey('loading'),
                 body: Center(child: CircularProgressIndicator()),
               );
+            } else if (authState.isLoggedIn) {
+              child = const MyHomePage(key: ValueKey('home'));
+            } else {
+              child = const LoginPage(key: ValueKey('login'));
             }
-            if (authState.isLoggedIn) return MyHomePage();
-            return const LoginPage();
+            return AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: child,
+            );
           },
         ),
       ),
@@ -105,12 +113,46 @@ class MyAppState extends ChangeNotifier {
 }
 
 class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key});
+
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
   var selectedIndex = 0;
+
+  Future<void> _handleLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text('You will need to sign in again.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await context.read<AuthState>().logout();
+
+    if (!mounted) return;
+    final error = context.read<AuthState>().errorMessage;
+    if (error != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error)));
+      context.read<AuthState>().clearError();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -154,13 +196,17 @@ class _MyHomePageState extends State<MyHomePage> {
                       alignment: Alignment.bottomCenter,
                       child: Padding(
                         padding: const EdgeInsets.only(bottom: 16.0),
-                        child: IconButton(
-                          icon: const Icon(Icons.logout),
-                          onPressed: () {
-                            context.read<AuthState>().logout();
-                          },
-                          tooltip: 'Logout',
-                        ),
+                        child: constraints.maxWidth >= 600
+                            ? TextButton.icon(
+                                icon: const Icon(Icons.logout),
+                                label: const Text('Log out'),
+                                onPressed: _handleLogout,
+                              )
+                            : IconButton(
+                                icon: const Icon(Icons.logout),
+                                onPressed: _handleLogout,
+                                tooltip: 'Log out',
+                              ),
                       ),
                     ),
                   ),

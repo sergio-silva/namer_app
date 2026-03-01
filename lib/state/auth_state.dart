@@ -74,10 +74,21 @@ class AuthState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await _authService.logout();
-    _isLoggedIn = false;
-    _currentUser = null;
+    _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
+
+    try {
+      await _authService.logout();
+      _isLoggedIn = false;
+      _currentUser = null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('AuthState.logout unexpected error: $e');
+      _errorMessage = 'Logout failed. Please try again.';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   void clearError() {
