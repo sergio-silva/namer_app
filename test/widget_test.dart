@@ -11,7 +11,7 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     final authService = AuthService(prefs: prefs);
 
-    await tester.pumpWidget(MyApp(authService: authService));
+    await tester.pumpWidget(MyApp(authService: authService, prefs: prefs));
 
     // While checkSession() is in flight, isLoading=true → spinner is shown.
     expect(find.byType(CircularProgressIndicator), findsOneWidget);

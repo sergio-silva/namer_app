@@ -29,15 +29,25 @@ void main() async {
     if (kDebugMode) debugPrint('Firebase init failed: $e\n$st');
   }
   runApp(
-    MyApp(notificationService: notificationService, authService: authService),
+    MyApp(
+      notificationService: notificationService,
+      authService: authService,
+      prefs: prefs,
+    ),
   );
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, this.notificationService, required this.authService});
+  const MyApp({
+    super.key,
+    this.notificationService,
+    required this.authService,
+    required this.prefs,
+  });
 
   final NotificationService? notificationService;
   final AuthService authService;
+  final SharedPreferences prefs;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -61,7 +71,7 @@ class _MyAppState extends State<MyApp> {
           create: (_) =>
               AuthState(authService: widget.authService)..checkSession(),
         ),
-        ChangeNotifierProvider(create: (_) => MyAppState()),
+        ChangeNotifierProvider(create: (_) => MyAppState(prefs: widget.prefs)),
       ],
       child: MaterialApp(
         title: 'Namer App',
@@ -93,6 +103,13 @@ class _MyAppState extends State<MyApp> {
 }
 
 class MyAppState extends ChangeNotifier {
+  MyAppState({required SharedPreferences prefs}) : _prefs = prefs {
+    _loadFavorites();
+  }
+
+  final SharedPreferences _prefs;
+  static const _keyFavorites = 'favorites';
+
   var current = WordPair.random();
 
   void getNext() {
@@ -102,12 +119,28 @@ class MyAppState extends ChangeNotifier {
 
   var favorites = <WordPair>{};
 
+  void _loadFavorites() {
+    final stored = _prefs.getStringList(_keyFavorites) ?? [];
+    favorites = stored.map((s) {
+      final parts = s.split(' ');
+      return WordPair(parts[0], parts[1]);
+    }).toSet();
+  }
+
+  void _saveFavorites() {
+    unawaited(_prefs.setStringList(
+      _keyFavorites,
+      favorites.map((p) => '${p.first} ${p.second}').toList(),
+    ));
+  }
+
   void toogleFavorite() {
     if (favorites.contains(current)) {
       favorites.remove(current);
     } else {
       favorites.add(current);
     }
+    _saveFavorites();
     notifyListeners();
   }
 }
