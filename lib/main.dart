@@ -28,7 +28,9 @@ void main() async {
   } catch (e, st) {
     if (kDebugMode) debugPrint('Firebase init failed: $e\n$st');
   }
-  runApp(MyApp(notificationService: notificationService, authService: authService));
+  runApp(
+    MyApp(notificationService: notificationService, authService: authService),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -67,7 +69,7 @@ class _MyAppState extends State<MyApp> {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightBlue),
         ),
         home: Consumer<AuthState>(
-          builder: (_, authState, __) {
+          builder: (_,authState,_) {
             if (authState.isLoading) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
@@ -108,12 +110,10 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-
   var selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-
     Widget page;
 
     switch (selectedIndex) {
@@ -149,6 +149,22 @@ class _MyHomePageState extends State<MyHomePage> {
                       selectedIndex = value;
                     });
                   },
+                  trailing: Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: IconButton(
+                          icon: const Icon(Icons.logout),
+                          onPressed: () {
+                            context.read<AuthState>().logout();
+                            page = const LoginPage();
+                          },
+                          tooltip: 'Logout',
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
               Expanded(
@@ -160,7 +176,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ],
           ),
         );
-      }
+      },
     );
   }
 }
@@ -209,10 +225,7 @@ class GeneratorPage extends StatelessWidget {
 }
 
 class BigCard extends StatelessWidget {
-  const BigCard({
-    super.key,
-    required this.pair,
-  });
+  const BigCard({super.key, required this.pair});
 
   final WordPair pair;
 
@@ -230,7 +243,7 @@ class BigCard extends StatelessWidget {
         child: Text(
           pair.asLowerCase,
           style: style,
-          semanticsLabel: "${pair.first} ${pair.second}"
+          semanticsLabel: "${pair.first} ${pair.second}",
         ),
       ),
     );
@@ -239,23 +252,19 @@ class BigCard extends StatelessWidget {
 
 class FavoritesPage extends StatelessWidget {
   @override
-
   Widget build(BuildContext context) {
-
     var appState = context.watch<MyAppState>();
     var favorites = appState.favorites;
 
     if (favorites.isEmpty) {
-      return Center(
-        child: Text('No favorites yet.'),
-      );
+      return Center(child: Text('No favorites yet.'));
     } else {
       return ListView(
         children: favorites.map((pair) {
           return ListTile(
             leading: Icon(Icons.favorite),
             title: Text(pair.asLowerCase),
-         );
+          );
         }).toList(),
       );
     }
