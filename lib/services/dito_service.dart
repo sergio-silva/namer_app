@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:dito_sdk/dito_sdk.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -9,12 +12,14 @@ class DitoService {
 
   final DitoSdk _sdk;
   String? _currentToken;
+  bool _userIdentified = false;
 
   Future<void> initialize({
     required String appKey,
     required String appSecret,
   }) async {
     await _sdk.initialize(appKey: appKey, appSecret: appSecret);
+    await _sdk.setDebugMode(enabled: kDebugMode);
 
     // Handle notification that opened the app from terminated state.
     final initial = await FirebaseMessaging.instance.getInitialMessage();
@@ -27,11 +32,15 @@ class DitoService {
       await _handleNotificationClick(message.data);
     });
 
-    // Register current FCM token and keep it up to date.
+    // Fetch and cache the FCM token. Registration is deferred until after
+    // identifyUser() because Dito requires the user to be identified first.
     final token = await FirebaseMessaging.instance.getToken();
-    if (token != null) await registerToken(token);
+    if (kDebugMode) debugPrint('DitoService: FCM token fetched → $token');
+    _currentToken = token;
     FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-      await registerToken(newToken);
+      if (kDebugMode) debugPrint('DitoService: FCM token refreshed → $newToken');
+      _currentToken = newToken;
+      if (_userIdentified) await registerToken(newToken);
     });
 
     // Listen for in-app notification click events from Dito.
@@ -49,10 +58,17 @@ class DitoService {
     );
   }
 
+  static String _sha1(String value) =>
+      sha1.convert(utf8.encode(value)).toString();
+
   Future<void> identifyUser(UserProfile user) async {
+    final id = _sha1(user.email);
+    if (kDebugMode) {
+      debugPrint('DitoService.identifyUser → id=$id email=${user.email}');
+    }
     try {
       await _sdk.identify(
-        id: user.email,
+        id: id,
         name: user.name,
         email: user.email,
         customData: {
@@ -62,6 +78,9 @@ class DitoService {
           'phone': user.phone,
         },
       );
+      if (kDebugMode) debugPrint('DitoService.identifyUser ✓ success');
+      _userIdentified = true;
+      if (_currentToken != null) await registerToken(_currentToken!);
     } catch (e) {
       if (kDebugMode) debugPrint('DitoService.identifyUser error: $e');
     }
@@ -76,9 +95,11 @@ class DitoService {
   }
 
   Future<void> registerToken(String token) async {
+    if (kDebugMode) debugPrint('DitoService.registerToken → $token');
     try {
       _currentToken = token;
       await _sdk.registerDeviceToken(token);
+      if (kDebugMode) debugPrint('DitoService.registerToken ✓ success');
     } catch (e) {
       if (kDebugMode) debugPrint('DitoService.registerToken error: $e');
     }
@@ -86,6 +107,7 @@ class DitoService {
 
   /// Unregisters the last known FCM token. Call on logout.
   Future<void> unregisterCurrentToken() async {
+    _userIdentified = false;
     if (_currentToken == null) return;
     try {
       await _sdk.unregisterDeviceToken(_currentToken!);

@@ -48,7 +48,7 @@ class AuthState extends ChangeNotifier {
     try {
       _currentUser = await _authService.login(email, password);
       _isLoggedIn = true;
-      if (_currentUser != null) unawaited(_ditoService?.identifyUser(_currentUser!));
+      if (_currentUser != null) await _ditoService?.identifyUser(_currentUser!);
     } on AuthException catch (e) {
       _errorMessage = _messageFor(e.reason);
     } catch (e) {
@@ -69,7 +69,7 @@ class AuthState extends ChangeNotifier {
       await _authService.register(profile, password);
       _currentUser = profile;
       _isLoggedIn = true;
-      unawaited(_ditoService?.identifyUser(profile));
+      await _ditoService?.identifyUser(profile);
     } on AuthException catch (e) {
       _errorMessage = _messageFor(e.reason);
     } catch (e) {
