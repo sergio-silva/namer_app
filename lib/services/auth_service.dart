@@ -29,10 +29,14 @@ class AuthService {
   final FlutterSecureStorage _secureStorage;
   final SharedPreferences _prefs;
 
-  static const _keyIsLoggedIn = 'is_logged_in';
-  static const _keyUserProfile = 'user_profile';
-  static const _keyPasswordHash = 'auth_password_hash';
-  static const _keySalt = 'auth_salt';
+  // Tracks which user is currently logged in.
+  static const _keyCurrentEmail = 'current_logged_in_email';
+
+  // Per-user storage keys — namespaced by email so multiple accounts can
+  // coexist on the same device without overwriting each other's data.
+  static String _profileKey(String email) => 'user_profile_$email';
+  static String _hashKey(String email) => 'auth_password_hash_$email';
+  static String _saltKey(String email) => 'auth_salt_$email';
 
   static final _phoneRegex = RegExp(
     r'^\+\d{1,3}[\s\-]?\(?\d{1,4}\)?[\s\-]?\d{3,5}[\s\-]?\d{4}$',
@@ -46,29 +50,29 @@ class AuthService {
     if (!isValidPhone(profile.phone)) {
       throw const AuthException(AuthFailureReason.invalidPhone);
     }
-    if (_prefs.getString(_keyUserProfile) != null) {
+    if (_prefs.getString(_profileKey(profile.email)) != null) {
       throw const AuthException(AuthFailureReason.emailAlreadyRegistered);
     }
 
     final salt = _generateSalt();
     final hash = _hashPassword(password, salt);
 
-    await _secureStorage.write(key: _keyPasswordHash, value: hash);
-    await _secureStorage.write(key: _keySalt, value: salt);
-    await _prefs.setString(_keyUserProfile, jsonEncode(profile.toJson()));
-    await _prefs.setBool(_keyIsLoggedIn, true);
+    await _secureStorage.write(key: _hashKey(profile.email), value: hash);
+    await _secureStorage.write(key: _saltKey(profile.email), value: salt);
+    await _prefs.setString(_profileKey(profile.email), jsonEncode(profile.toJson()));
+    await _prefs.setString(_keyCurrentEmail, profile.email);
   }
 
   /// Logs in with [email] and [password]. Returns the stored [UserProfile] on
   /// success. Throws [AuthException] if no account exists or the password is wrong.
   Future<UserProfile> login(String email, String password) async {
-    final profileJson = _prefs.getString(_keyUserProfile);
+    final profileJson = _prefs.getString(_profileKey(email));
     if (profileJson == null) {
       throw const AuthException(AuthFailureReason.userNotFound);
     }
 
-    final salt = await _secureStorage.read(key: _keySalt);
-    final storedHash = await _secureStorage.read(key: _keyPasswordHash);
+    final salt = await _secureStorage.read(key: _saltKey(email));
+    final storedHash = await _secureStorage.read(key: _hashKey(email));
     if (salt == null || storedHash == null) {
       throw const AuthException(AuthFailureReason.userNotFound);
     }
@@ -80,25 +84,23 @@ class AuthService {
     final profile = UserProfile.fromJson(
       jsonDecode(profileJson) as Map<String, dynamic>,
     );
-    if (profile.email != email) {
-      throw const AuthException(AuthFailureReason.userNotFound);
-    }
 
-    await _prefs.setBool(_keyIsLoggedIn, true);
+    await _prefs.setString(_keyCurrentEmail, email);
     return profile;
   }
 
-  /// Clears the session flag without deleting the stored profile or credentials.
+  /// Clears the session without deleting the stored profile or credentials,
+  /// so the user can log back in later.
   Future<void> logout() async {
-    await _prefs.setBool(_keyIsLoggedIn, false);
+    await _prefs.remove(_keyCurrentEmail);
   }
 
   /// Returns the active [UserProfile] if a valid session exists, or null otherwise.
   Future<UserProfile?> loadSession() async {
-    final isLoggedIn = _prefs.getBool(_keyIsLoggedIn) ?? false;
-    if (!isLoggedIn) return null;
+    final email = _prefs.getString(_keyCurrentEmail);
+    if (email == null) return null;
 
-    final profileJson = _prefs.getString(_keyUserProfile);
+    final profileJson = _prefs.getString(_profileKey(email));
     if (profileJson == null) return null;
 
     return UserProfile.fromJson(jsonDecode(profileJson) as Map<String, dynamic>);

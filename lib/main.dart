@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dito_options.dart';
 import 'firebase_options.dart';
 import 'screens/login_page.dart';
 import 'services/auth_service.dart';
+import 'services/dito_service.dart';
 import 'services/notification_service.dart';
 import 'state/auth_state.dart';
 
@@ -19,18 +21,25 @@ void main() async {
   final authService = AuthService(prefs: prefs);
 
   NotificationService? notificationService;
+  DitoService? ditoService;
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     notificationService = NotificationService();
     await notificationService.initialize();
+    ditoService = DitoService();
+    await ditoService.initialize(
+      appKey: DitoOptions.appKey,
+      appSecret: DitoOptions.appSecret,
+    );
   } catch (e, st) {
     if (kDebugMode) debugPrint('Firebase init failed: $e\n$st');
   }
   runApp(
     MyApp(
       notificationService: notificationService,
+      ditoService: ditoService,
       authService: authService,
       prefs: prefs,
     ),
@@ -41,11 +50,13 @@ class MyApp extends StatefulWidget {
   const MyApp({
     super.key,
     this.notificationService,
+    this.ditoService,
     required this.authService,
     required this.prefs,
   });
 
   final NotificationService? notificationService;
+  final DitoService? ditoService;
   final AuthService authService;
   final SharedPreferences prefs;
 
@@ -68,10 +79,11 @@ class _MyAppState extends State<MyApp> {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
-          create: (_) =>
-              AuthState(authService: widget.authService)..checkSession(),
+          create: (_) => AuthState(
+            authService: widget.authService,
+            ditoService: widget.ditoService,
+          )..checkSession(),
         ),
-        ChangeNotifierProvider(create: (_) => MyAppState(prefs: widget.prefs)),
       ],
       child: MaterialApp(
         title: 'Namer App',
@@ -86,8 +98,17 @@ class _MyAppState extends State<MyApp> {
                 key: ValueKey('loading'),
                 body: Center(child: CircularProgressIndicator()),
               );
-            } else if (authState.isLoggedIn) {
-              child = const MyHomePage(key: ValueKey('home'));
+            } else if (authState.isLoggedIn && authState.currentUser != null) {
+              // Keyed by email so MyAppState is recreated (and favorites
+              // reloaded) whenever a different user logs in.
+              child = ChangeNotifierProvider(
+                key: ValueKey(authState.currentUser!.email),
+                create: (_) => MyAppState(
+                  prefs: widget.prefs,
+                  userEmail: authState.currentUser!.email,
+                ),
+                child: const MyHomePage(key: ValueKey('home')),
+              );
             } else {
               child = const LoginPage(key: ValueKey('login'));
             }
@@ -103,12 +124,14 @@ class _MyAppState extends State<MyApp> {
 }
 
 class MyAppState extends ChangeNotifier {
-  MyAppState({required SharedPreferences prefs}) : _prefs = prefs {
+  MyAppState({required SharedPreferences prefs, required String userEmail})
+      : _prefs = prefs,
+        _keyFavorites = 'favorites_$userEmail' {
     _loadFavorites();
   }
 
   final SharedPreferences _prefs;
-  static const _keyFavorites = 'favorites';
+  final String _keyFavorites;
 
   var current = WordPair.random();
 

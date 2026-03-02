@@ -121,6 +121,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.12"
+  dito_sdk:
+    dependency: "direct main"
+    description:
+      name: dito_sdk
+      sha256: "8b3ef104c99ae3fa83e137f52e190b9317b4c5f685ddcf9e682b09f9a0ca4ecd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.1"
   english_words:
     dependency: "direct main"
     description:

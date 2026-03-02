@@ -1,12 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
+import '../services/dito_service.dart';
 
 class AuthState extends ChangeNotifier {
-  AuthState({required AuthService authService}) : _authService = authService;
+  AuthState({required AuthService authService, DitoService? ditoService})
+      : _authService = authService,
+        _ditoService = ditoService;
 
   final AuthService _authService;
+  final DitoService? _ditoService;
 
   bool _isLoading = true;
   bool _isLoggedIn = false;
@@ -42,6 +48,7 @@ class AuthState extends ChangeNotifier {
     try {
       _currentUser = await _authService.login(email, password);
       _isLoggedIn = true;
+      if (_currentUser != null) unawaited(_ditoService?.identifyUser(_currentUser!));
     } on AuthException catch (e) {
       _errorMessage = _messageFor(e.reason);
     } catch (e) {
@@ -62,6 +69,7 @@ class AuthState extends ChangeNotifier {
       await _authService.register(profile, password);
       _currentUser = profile;
       _isLoggedIn = true;
+      unawaited(_ditoService?.identifyUser(profile));
     } on AuthException catch (e) {
       _errorMessage = _messageFor(e.reason);
     } catch (e) {
@@ -79,6 +87,7 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
 
     try {
+      unawaited(_ditoService?.unregisterCurrentToken());
       await _authService.logout();
       _isLoggedIn = false;
       _currentUser = null;

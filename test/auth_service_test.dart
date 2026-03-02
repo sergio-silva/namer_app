@@ -75,13 +75,13 @@ void main() {
 
       verify(
         () => storage.write(
-          key: 'auth_password_hash',
+          key: 'auth_password_hash_user@example.com',
           value: any(named: 'value'),
         ),
       ).called(1);
       verify(
         () => storage.write(
-          key: 'auth_salt',
+          key: 'auth_salt_user@example.com',
           value: any(named: 'value'),
         ),
       ).called(1);
@@ -93,7 +93,7 @@ void main() {
 
       await service.register(_makeProfile(), 'password123');
 
-      final stored = prefs.getString('user_profile');
+      final stored = prefs.getString('user_profile_user@example.com');
       expect(stored, isNotNull);
       final json = jsonDecode(stored!) as Map<String, dynamic>;
       expect(json['email'], 'user@example.com');
@@ -101,13 +101,13 @@ void main() {
       expect(json.containsKey('password_hash'), isFalse);
     });
 
-    test('sets is_logged_in = true', () async {
+    test('sets current_logged_in_email to the registered email', () async {
       final (service, _) = await _makeService();
       final prefs = await SharedPreferences.getInstance();
 
       await service.register(_makeProfile(), 'password123');
 
-      expect(prefs.getBool('is_logged_in'), isTrue);
+      expect(prefs.getString('current_logged_in_email'), 'user@example.com');
     });
 
     test('throws emailAlreadyRegistered if a profile already exists', () async {
@@ -159,19 +159,22 @@ void main() {
 
       // Capture what was written to secure storage during register
       final saltCapture = verify(
-        () => storage.write(key: 'auth_salt', value: captureAny(named: 'value')),
+        () => storage.write(
+          key: 'auth_salt_user@example.com',
+          value: captureAny(named: 'value'),
+        ),
       ).captured;
       final hashCapture = verify(
         () => storage.write(
-          key: 'auth_password_hash',
+          key: 'auth_password_hash_user@example.com',
           value: captureAny(named: 'value'),
         ),
       ).captured;
 
       // Stub reads to return the captured values
-      when(() => storage.read(key: 'auth_salt'))
+      when(() => storage.read(key: 'auth_salt_user@example.com'))
           .thenAnswer((_) async => saltCapture.first as String);
-      when(() => storage.read(key: 'auth_password_hash'))
+      when(() => storage.read(key: 'auth_password_hash_user@example.com'))
           .thenAnswer((_) async => hashCapture.first as String);
 
       final profile = await service.login('user@example.com', 'secret');
@@ -195,24 +198,12 @@ void main() {
     });
 
     test('throws userNotFound if email does not match stored profile', () async {
-      final (service, storage) = await _makeService();
+      final (service, _) = await _makeService();
 
       await service.register(_makeProfile(), 'secret');
 
-      final saltCapture = verify(
-        () => storage.write(key: 'auth_salt', value: captureAny(named: 'value')),
-      ).captured;
-      final hashCapture = verify(
-        () => storage.write(
-          key: 'auth_password_hash',
-          value: captureAny(named: 'value'),
-        ),
-      ).captured;
-      when(() => storage.read(key: 'auth_salt'))
-          .thenAnswer((_) async => saltCapture.first as String);
-      when(() => storage.read(key: 'auth_password_hash'))
-          .thenAnswer((_) async => hashCapture.first as String);
-
+      // Attempting to log in with a different email finds no profile for that
+      // email (keys are per-email), so it throws userNotFound directly.
       expect(
         () => service.login('different@example.com', 'secret'),
         throwsA(
@@ -231,18 +222,21 @@ void main() {
       await service.register(_makeProfile(), 'correct');
 
       final saltCapture = verify(
-        () => storage.write(key: 'auth_salt', value: captureAny(named: 'value')),
+        () => storage.write(
+          key: 'auth_salt_user@example.com',
+          value: captureAny(named: 'value'),
+        ),
       ).captured;
       final hashCapture = verify(
         () => storage.write(
-          key: 'auth_password_hash',
+          key: 'auth_password_hash_user@example.com',
           value: captureAny(named: 'value'),
         ),
       ).captured;
 
-      when(() => storage.read(key: 'auth_salt'))
+      when(() => storage.read(key: 'auth_salt_user@example.com'))
           .thenAnswer((_) async => saltCapture.first as String);
-      when(() => storage.read(key: 'auth_password_hash'))
+      when(() => storage.read(key: 'auth_password_hash_user@example.com'))
           .thenAnswer((_) async => hashCapture.first as String);
 
       expect(
@@ -259,35 +253,20 @@ void main() {
   });
 
   group('AuthService.logout', () {
-    test('sets is_logged_in = false without deleting profile', () async {
-      final (service, storage) = await _makeService();
+    test('clears current_logged_in_email without deleting profile', () async {
+      final (service, _) = await _makeService();
       final prefs = await SharedPreferences.getInstance();
 
       await service.register(_makeProfile(), 'pass');
-
-      final saltCapture = verify(
-        () => storage.write(key: 'auth_salt', value: captureAny(named: 'value')),
-      ).captured;
-      final hashCapture = verify(
-        () => storage.write(
-          key: 'auth_password_hash',
-          value: captureAny(named: 'value'),
-        ),
-      ).captured;
-      when(() => storage.read(key: 'auth_salt'))
-          .thenAnswer((_) async => saltCapture.first as String);
-      when(() => storage.read(key: 'auth_password_hash'))
-          .thenAnswer((_) async => hashCapture.first as String);
-
       await service.logout();
 
-      expect(prefs.getBool('is_logged_in'), isFalse);
-      expect(prefs.getString('user_profile'), isNotNull);
+      expect(prefs.getString('current_logged_in_email'), isNull);
+      expect(prefs.getString('user_profile_user@example.com'), isNotNull);
     });
   });
 
   group('AuthService.loadSession', () {
-    test('returns null when is_logged_in is false', () async {
+    test('returns null when no session exists', () async {
       final (service, _) = await _makeService();
 
       final result = await service.loadSession();
@@ -296,23 +275,9 @@ void main() {
     });
 
     test('returns UserProfile when session is active', () async {
-      final (service, storage) = await _makeService();
+      final (service, _) = await _makeService();
 
       await service.register(_makeProfile(), 'pass');
-
-      final saltCapture = verify(
-        () => storage.write(key: 'auth_salt', value: captureAny(named: 'value')),
-      ).captured;
-      final hashCapture = verify(
-        () => storage.write(
-          key: 'auth_password_hash',
-          value: captureAny(named: 'value'),
-        ),
-      ).captured;
-      when(() => storage.read(key: 'auth_salt'))
-          .thenAnswer((_) async => saltCapture.first as String);
-      when(() => storage.read(key: 'auth_password_hash'))
-          .thenAnswer((_) async => hashCapture.first as String);
 
       final result = await service.loadSession();
 
@@ -320,8 +285,10 @@ void main() {
       expect(result!.email, 'user@example.com');
     });
 
-    test('returns null when is_logged_in is true but profile is missing', () async {
-      SharedPreferences.setMockInitialValues({'is_logged_in': true});
+    test('returns null when session email is set but profile is missing', () async {
+      SharedPreferences.setMockInitialValues({
+        'current_logged_in_email': 'ghost@example.com',
+      });
       final prefs = await SharedPreferences.getInstance();
       final storage = MockFlutterSecureStorage();
       _stubSecureStorageDefaults(storage);
